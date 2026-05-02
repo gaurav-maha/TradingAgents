@@ -296,6 +296,39 @@ def test_codex_http_client_moves_system_input_to_instructions(monkeypatch):
     assert captured["stream_payload"] == captured["payload"]
 
 
+def test_codex_http_client_adds_default_instructions_for_user_only_input(monkeypatch):
+    """String prompts become user-only Responses input; Codex still requires instructions."""
+    codex_oauth.save_tokens(_make_entry(access="real-access", accountId="acct-x"))
+    monkeypatch.setattr(codex_oauth, "refresh_access_token", lambda r: pytest.fail("no refresh"))
+
+    captured = {}
+
+    def transport_handler(request: httpx.Request) -> httpx.Response:
+        captured["payload"] = json.loads(request.content)
+        captured["stream_payload"] = json.loads(b"".join(request.stream))
+        return httpx.Response(200, json={"ok": True})
+
+    client = codex_http.CodexHTTPClient(transport=httpx.MockTransport(transport_handler))
+    resp = client.post(
+        "https://chatgpt.com/backend-api/codex/responses",
+        json={
+            "model": "gpt-5.5",
+            "stream": True,
+            "input": [
+                {"role": "user", "type": "message", "content": "Analyze SPY."},
+            ],
+        },
+    )
+
+    assert resp.status_code == 200
+    assert captured["payload"]["store"] is False
+    assert captured["payload"]["instructions"] == "You are a helpful AI assistant."
+    assert captured["payload"]["input"] == [
+        {"role": "user", "type": "message", "content": "Analyze SPY."}
+    ]
+    assert captured["stream_payload"] == captured["payload"]
+
+
 # ---------------------------------------------------------------------------
 # Factory wiring
 # ---------------------------------------------------------------------------
