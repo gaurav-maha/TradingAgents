@@ -642,14 +642,14 @@ def get_user_selections():
             )
         )
         thinking_level = ask_gemini_thinking_config()
-    elif provider_lower == "openai":
+    elif provider_lower in ("openai", "codex"):
         console.print(
             create_question_box(
                 "Step 8: Reasoning Effort",
                 "Configure OpenAI reasoning effort level"
             )
         )
-        reasoning_effort = ask_openai_reasoning_effort()
+        reasoning_effort = ask_openai_reasoning_effort(provider_lower)
     elif provider_lower == "anthropic":
         console.print(
             create_question_box(
@@ -1283,6 +1283,67 @@ def run_analysis(checkpoint: bool = False):
     display_choice = typer.prompt("\nDisplay full report on screen?", default="Y").strip().upper()
     if display_choice in ("Y", "YES", ""):
         display_complete_report(final_state)
+
+
+auth_app = typer.Typer(help="Manage authentication (e.g. ChatGPT Pro/Plus OAuth).")
+app.add_typer(auth_app, name="auth")
+
+
+@auth_app.command("login")
+def auth_login(
+    no_browser: bool = typer.Option(
+        False,
+        "--no-browser",
+        help="Print the authorization URL but do not open a browser automatically.",
+    ),
+):
+    """Authorize TradingAgents with your ChatGPT Pro/Plus subscription.
+
+    Runs OpenAI's Codex OAuth (PKCE) flow with a local redirect server on
+    ``localhost:1455``. The resulting refresh token is stored in
+    ``~/.tradingagents/auth.json`` (mode 0600) and used to call the Codex
+    backend instead of the metered ``api.openai.com`` API. Pick provider
+    ``codex`` in your config to use it.
+    """
+    from tradingagents.llm_clients import codex_oauth
+
+    try:
+        entry = codex_oauth.login(open_browser=not no_browser)
+    except RuntimeError as exc:
+        console.print(f"[red]Login failed:[/red] {exc}")
+        raise typer.Exit(code=1)
+
+    masked = entry["access"][:8] + "…" + entry["access"][-4:]
+    console.print(f"[green]✓ Logged in.[/green] Access token {masked}, "
+                  f"account_id={entry.get('accountId') or '(none)'}")
+
+
+@auth_app.command("logout")
+def auth_logout():
+    """Remove stored ChatGPT OAuth tokens."""
+    from tradingagents.llm_clients import codex_oauth
+
+    if codex_oauth.clear_tokens():
+        console.print("[green]✓ Logged out.[/green]")
+    else:
+        console.print("[yellow]No stored ChatGPT tokens found.[/yellow]")
+
+
+@auth_app.command("status")
+def auth_status():
+    """Show current ChatGPT OAuth login status."""
+    from datetime import datetime
+    from tradingagents.llm_clients import codex_oauth
+
+    entry = codex_oauth.load_tokens()
+    if not entry:
+        console.print("[yellow]Not logged in.[/yellow] Run "
+                      "`tradingagents auth login` to authorize.")
+        return
+    expires = entry.get("expires", 0) / 1000
+    when = datetime.fromtimestamp(expires).isoformat() if expires else "unknown"
+    console.print(f"[green]Logged in.[/green] account_id="
+                  f"{entry.get('accountId') or '(none)'}, access expires {when}")
 
 
 @app.command()

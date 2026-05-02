@@ -2,9 +2,11 @@ from typing import Optional
 
 from .base_client import BaseLLMClient
 
-# Providers that use the OpenAI-compatible chat completions API
+# Providers that use the OpenAI-compatible chat completions API.
+# ``codex`` is OpenAI's ChatGPT-Pro/Plus subscription path (Responses API
+# served by chatgpt.com/backend-api/codex with an OAuth bearer token).
 _OPENAI_COMPATIBLE = (
-    "openai", "xai", "deepseek",
+    "openai", "codex", "xai", "deepseek",
     "qwen", "qwen-cn",
     "glm", "glm-cn",
     "minimax", "minimax-cn",
