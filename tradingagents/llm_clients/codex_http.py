@@ -30,6 +30,7 @@ from . import codex_oauth
 
 # Note: trailing slash is significant for httpx URL joining.
 CODEX_BASE = "https://chatgpt.com/backend-api/codex"
+DEFAULT_INSTRUCTIONS = "You are a helpful AI assistant."
 
 
 def _rewrite_url(url: httpx.URL) -> httpx.URL:
@@ -132,14 +133,7 @@ def _adapt_responses_payload(request: httpx.Request) -> None:
             continue
         remaining.append(item)
 
-    if not instructions:
-        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-        request.headers["content-length"] = str(len(body))
-        request._content = body
-        request.stream = httpx.ByteStream(body)
-        return
-
-    payload["instructions"] = "\n\n".join(instructions)
+    payload["instructions"] = "\n\n".join(instructions) if instructions else DEFAULT_INSTRUCTIONS
     payload["input"] = remaining
     body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     request.headers["content-length"] = str(len(body))
