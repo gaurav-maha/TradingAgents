@@ -97,20 +97,29 @@ def _adapt_responses_payload(request: httpx.Request) -> None:
     if request.method.upper() != "POST" or not request.url.path.endswith("/responses"):
         return
 
-    content_type = request.headers.get("content-type", "")
-    if "application/json" not in content_type:
-        return
-
     try:
         payload = json.loads(request.content)
     except (json.JSONDecodeError, UnicodeDecodeError):
         return
 
-    if not isinstance(payload, dict) or payload.get("instructions"):
+    if not isinstance(payload, dict):
+        return
+
+    payload["store"] = False
+
+    if payload.get("instructions"):
+        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        request.headers["content-length"] = str(len(body))
+        request._content = body
+        request.stream = httpx.ByteStream(body)
         return
 
     input_items = payload.get("input")
     if not isinstance(input_items, list):
+        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        request.headers["content-length"] = str(len(body))
+        request._content = body
+        request.stream = httpx.ByteStream(body)
         return
 
     instructions = []
@@ -124,6 +133,10 @@ def _adapt_responses_payload(request: httpx.Request) -> None:
         remaining.append(item)
 
     if not instructions:
+        body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+        request.headers["content-length"] = str(len(body))
+        request._content = body
+        request.stream = httpx.ByteStream(body)
         return
 
     payload["instructions"] = "\n\n".join(instructions)
@@ -131,6 +144,7 @@ def _adapt_responses_payload(request: httpx.Request) -> None:
     body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     request.headers["content-length"] = str(len(body))
     request._content = body
+    request.stream = httpx.ByteStream(body)
 
 
 class CodexHTTPClient(httpx.Client):
