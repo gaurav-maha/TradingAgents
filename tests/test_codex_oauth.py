@@ -101,6 +101,29 @@ def test_load_tokens_returns_none_for_non_oauth_entry(tmp_path):
     assert codex_oauth.load_tokens() is None
 
 
+def test_load_tokens_imports_codex_cli_auth(tmp_path, monkeypatch):
+    monkeypatch.delenv("TRADINGAGENTS_HOME", raising=False)
+    monkeypatch.setattr(codex_oauth.Path, "home", lambda: tmp_path)
+
+    codex_dir = tmp_path / ".codex"
+    codex_dir.mkdir()
+    access = _fake_jwt({"exp": int(time.time()) + 3600})
+    (codex_dir / "auth.json").write_text(json.dumps({
+        "auth_mode": "chatgpt",
+        "tokens": {
+            "access_token": access,
+            "refresh_token": "codex-refresh",
+            "account_id": "codex-account",
+        },
+    }))
+
+    loaded = codex_oauth.load_tokens()
+    assert loaded["access"] == access
+    assert loaded["refresh"] == "codex-refresh"
+    assert loaded["accountId"] == "codex-account"
+    assert loaded["expires"] > int(time.time() * 1000)
+
+
 def test_clear_tokens_removes_only_openai(tmp_path):
     path = tmp_path / "auth.json"
     path.write_text(json.dumps({
@@ -249,6 +272,7 @@ def test_codex_http_client_moves_system_input_to_instructions(monkeypatch):
 
     def transport_handler(request: httpx.Request) -> httpx.Response:
         captured["payload"] = json.loads(request.content)
+        captured["stream_payload"] = json.loads(b"".join(request.stream))
         return httpx.Response(200, json={"ok": True})
 
     client = codex_http.CodexHTTPClient(transport=httpx.MockTransport(transport_handler))
@@ -264,10 +288,12 @@ def test_codex_http_client_moves_system_input_to_instructions(monkeypatch):
     )
 
     assert resp.status_code == 200
+    assert captured["payload"]["store"] is False
     assert captured["payload"]["instructions"] == "Follow the system prompt."
     assert captured["payload"]["input"] == [
         {"role": "user", "type": "message", "content": "SPY"}
     ]
+    assert captured["stream_payload"] == captured["payload"]
 
 
 # ---------------------------------------------------------------------------
@@ -281,6 +307,14 @@ def test_factory_builds_codex_client_without_calling_network(monkeypatch):
     # real api_key shape. Just sanity-check attributes that drove construction.
     assert client.provider == "codex"
     assert client.model == "gpt-5-codex"
+
+
+def test_codex_llm_uses_streaming_responses(monkeypatch):
+    """Codex backend requires streamed /responses calls."""
+    codex_oauth.save_tokens(_make_entry())
+    llm = create_llm_client(provider="codex", model="gpt-5.5").get_llm()
+    assert llm.streaming is True
+    assert llm.use_responses_api is True
 
 
 def test_codex_provider_is_openai_compatible():
@@ -325,26 +359,24 @@ def test_get_llm_routes_through_codex_backend(monkeypatch):
         captured["url"] = str(request.url)
         captured["auth"] = request.headers.get("Authorization")
         captured["account"] = request.headers.get("ChatGPT-Account-Id")
-        # Minimal Responses-API-shaped reply so ChatOpenAI doesn't choke.
+        captured["payload"] = json.loads(request.content)
+        # Minimal Responses-API SSE reply so ChatOpenAI's streaming path can
+        # aggregate a final AIMessage.
+        sse = "\n\n".join([
+            'event: response.created\ndata: {"type":"response.created","response":{"id":"resp_1","object":"response","created_at":0,"status":"in_progress","model":"gpt-5-codex","output":[]}}',
+            'event: response.output_item.added\ndata: {"type":"response.output_item.added","output_index":0,"item":{"id":"msg_1","type":"message","role":"assistant","status":"in_progress","content":[]}}',
+            'event: response.content_part.added\ndata: {"type":"response.content_part.added","item_id":"msg_1","output_index":0,"content_index":0,"part":{"type":"output_text","text":"","annotations":[]}}',
+            'event: response.output_text.delta\ndata: {"type":"response.output_text.delta","item_id":"msg_1","output_index":0,"content_index":0,"delta":"ok"}',
+            'event: response.output_text.done\ndata: {"type":"response.output_text.done","item_id":"msg_1","output_index":0,"content_index":0,"text":"ok"}',
+            'event: response.content_part.done\ndata: {"type":"response.content_part.done","item_id":"msg_1","output_index":0,"content_index":0,"part":{"type":"output_text","text":"ok","annotations":[]}}',
+            'event: response.output_item.done\ndata: {"type":"response.output_item.done","output_index":0,"item":{"id":"msg_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"ok","annotations":[]}]}}',
+            'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp_1","object":"response","created_at":0,"status":"completed","model":"gpt-5-codex","output":[{"id":"msg_1","type":"message","role":"assistant","status":"completed","content":[{"type":"output_text","text":"ok","annotations":[]}]}],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}',
+            "data: [DONE]",
+        ]) + "\n\n"
         return httpx.Response(
             200,
-            json={
-                "id": "resp_1",
-                "object": "response",
-                "model": "gpt-5-codex",
-                "created_at": 0,
-                "status": "completed",
-                "output": [
-                    {
-                        "id": "msg_1",
-                        "type": "message",
-                        "role": "assistant",
-                        "status": "completed",
-                        "content": [{"type": "output_text", "text": "ok", "annotations": []}],
-                    }
-                ],
-                "usage": {"input_tokens": 1, "output_tokens": 1, "total_tokens": 2},
-            },
+            content=sse,
+            headers={"content-type": "text/event-stream"},
         )
 
     sync = codex_http.CodexHTTPClient(transport=httpx.MockTransport(handler))
@@ -363,3 +395,5 @@ def test_get_llm_routes_through_codex_backend(monkeypatch):
     assert captured["url"].startswith("https://chatgpt.com/backend-api/codex/")
     assert captured["auth"] == "Bearer real-access"
     assert captured["account"] == "acct-x"
+    assert captured["payload"]["stream"] is True
+    assert captured["payload"]["store"] is False

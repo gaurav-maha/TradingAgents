@@ -157,6 +157,7 @@ class OpenAIClient(BaseLLMClient):
             llm_kwargs["api_key"] = "tradingagents-codex-oauth"
             llm_kwargs.setdefault("http_client", codex_http.build_sync_client())
             llm_kwargs.setdefault("http_async_client", codex_http.build_async_client())
+            llm_kwargs["streaming"] = True
         elif self.provider in _PROVIDER_CONFIG:
             default_base, api_key_env = _PROVIDER_CONFIG[self.provider]
             llm_kwargs["base_url"] = self.base_url or default_base

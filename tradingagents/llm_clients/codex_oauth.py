@@ -61,6 +61,10 @@ def _auth_file() -> Path:
     return Path.home() / ".tradingagents" / "auth.json"
 
 
+def _codex_cli_auth_file() -> Path:
+    return Path.home() / ".codex" / "auth.json"
+
+
 # ---------------------------------------------------------------------------
 # PKCE helpers
 # ---------------------------------------------------------------------------
@@ -95,15 +99,58 @@ def load_tokens() -> Optional[dict]:
     """Return stored Codex OAuth tokens or ``None`` if not logged in."""
     path = _auth_file()
     if not path.exists():
+        return _load_codex_cli_tokens()
+    try:
+        data = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError):
+        return _load_codex_cli_tokens()
+    entry = data.get("openai") if isinstance(data, dict) else None
+    if not isinstance(entry, dict) or entry.get("type") != "oauth":
+        return _load_codex_cli_tokens()
+    if not parse_jwt_claims(str(entry.get("access") or "")):
+        # Ignore malformed/mock entries and recover from the Codex CLI login
+        # when available.
+        imported = _load_codex_cli_tokens()
+        if imported:
+            save_tokens(imported)
+            return imported
+    return entry
+
+
+def _load_codex_cli_tokens() -> Optional[dict]:
+    """Import OAuth tokens from the official Codex CLI auth file if present."""
+    if os.environ.get("TRADINGAGENTS_HOME"):
+        return None
+
+    path = _codex_cli_auth_file()
+    if not path.exists():
         return None
     try:
         data = json.loads(path.read_text())
     except (json.JSONDecodeError, OSError):
         return None
-    entry = data.get("openai") if isinstance(data, dict) else None
-    if not isinstance(entry, dict) or entry.get("type") != "oauth":
+
+    tokens = data.get("tokens") if isinstance(data, dict) else None
+    if not isinstance(tokens, dict):
         return None
-    return entry
+
+    access = tokens.get("access_token")
+    refresh = tokens.get("refresh_token")
+    if not access or not refresh:
+        return None
+
+    claims = parse_jwt_claims(access)
+    expires = int(claims.get("exp", 0)) * 1000 if claims.get("exp") else 0
+    if not expires:
+        expires = int(time.time() * 1000) + 3600 * 1000
+
+    return {
+        "type": "oauth",
+        "access": access,
+        "refresh": refresh,
+        "expires": expires,
+        "accountId": tokens.get("account_id") or extract_account_id(tokens) or "",
+    }
 
 
 def save_tokens(entry: dict) -> None:
