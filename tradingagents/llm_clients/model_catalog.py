@@ -23,6 +23,18 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("GPT-5.4 Pro - Most capable, expensive ($30/$180 per 1M tokens)", "gpt-5.4-pro"),
         ],
     },
+    "codex": {
+        "quick": [
+            ("GPT-5.5 - Default for ChatGPT subscription", "gpt-5.5"),
+            ("GPT-5-Codex - Codex-tuned variant", "gpt-5-codex"),
+            ("GPT-5.4 - Frontier model", "gpt-5.4"),
+        ],
+        "deep": [
+            ("GPT-5.5 - Default for ChatGPT subscription", "gpt-5.5"),
+            ("GPT-5-Codex - Codex-tuned variant", "gpt-5-codex"),
+            ("GPT-5.4 - Frontier model", "gpt-5.4"),
+        ],
+    },
     "anthropic": {
         "quick": [
             ("Claude Sonnet 4.6 - Best speed and intelligence balance", "claude-sonnet-4-6"),

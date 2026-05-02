@@ -147,7 +147,17 @@ class OpenAIClient(BaseLLMClient):
         # Provider-specific base URL and auth. An explicit base_url on the
         # client (e.g. a corporate proxy) takes precedence over the
         # provider default so users can route through their own gateway.
-        if self.provider in _PROVIDER_CONFIG:
+        if self.provider == "codex":
+            # Subscription-backed OAuth path. The httpx clients below
+            # rewrite URLs and inject Bearer tokens; ``api_key`` is a
+            # placeholder so the SDK doesn't reject the constructor.
+            from . import codex_http
+
+            llm_kwargs["base_url"] = self.base_url or codex_http.CODEX_BASE
+            llm_kwargs["api_key"] = "tradingagents-codex-oauth"
+            llm_kwargs.setdefault("http_client", codex_http.build_sync_client())
+            llm_kwargs.setdefault("http_async_client", codex_http.build_async_client())
+        elif self.provider in _PROVIDER_CONFIG:
             default_base, api_key_env = _PROVIDER_CONFIG[self.provider]
             llm_kwargs["base_url"] = self.base_url or default_base
             if api_key_env:
@@ -164,9 +174,10 @@ class OpenAIClient(BaseLLMClient):
             if key in self.kwargs:
                 llm_kwargs[key] = self.kwargs[key]
 
-        # Native OpenAI: use Responses API for consistent behavior across
-        # all model families. Third-party providers use Chat Completions.
-        if self.provider == "openai":
+        # Native OpenAI and Codex use the Responses API for consistent
+        # behavior across all model families. Third-party providers use
+        # Chat Completions.
+        if self.provider in ("openai", "codex"):
             llm_kwargs["use_responses_api"] = True
 
         # DeepSeek's thinking-mode quirks live in their own subclass so the

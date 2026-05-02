@@ -233,6 +233,7 @@ def select_llm_provider() -> tuple[str, str | None]:
     # (display_name, provider_key, base_url)
     PROVIDERS = [
         ("OpenAI", "openai", "https://api.openai.com/v1"),
+        ("ChatGPT Pro/Plus (OAuth, no API key)", "codex", "https://chatgpt.com/backend-api/codex"),
         ("Google", "google", None),
         ("Anthropic", "anthropic", "https://api.anthropic.com/"),
         ("xAI", "xai", "https://api.x.ai/v1"),
@@ -268,13 +269,26 @@ def select_llm_provider() -> tuple[str, str | None]:
     return provider, url
 
 
-def ask_openai_reasoning_effort() -> str:
-    """Ask for OpenAI reasoning effort level."""
-    choices = [
-        questionary.Choice("Medium (Default)", "medium"),
-        questionary.Choice("High (More thorough)", "high"),
-        questionary.Choice("Low (Faster)", "low"),
-    ]
+def ask_openai_reasoning_effort(provider: str = "openai") -> str:
+    """Ask for OpenAI reasoning effort level.
+
+    Codex (ChatGPT subscription) exposes an additional ``xhigh`` tier and
+    defaults to it, since the user is paying a flat subscription rate
+    rather than per-token.
+    """
+    if provider.lower() == "codex":
+        choices = [
+            questionary.Choice("xHigh (Default for ChatGPT - deepest thinking)", "xhigh"),
+            questionary.Choice("High", "high"),
+            questionary.Choice("Medium", "medium"),
+            questionary.Choice("Low (Faster)", "low"),
+        ]
+    else:
+        choices = [
+            questionary.Choice("Medium (Default)", "medium"),
+            questionary.Choice("High (More thorough)", "high"),
+            questionary.Choice("Low (Faster)", "low"),
+        ]
     return questionary.select(
         "Select Reasoning Effort:",
         choices=choices,
