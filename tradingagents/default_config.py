@@ -18,6 +18,9 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_CHECKPOINT_ENABLED":   "checkpoint_enabled",
     "TRADINGAGENTS_BENCHMARK_TICKER":     "benchmark_ticker",
     "TRADINGAGENTS_TEMPERATURE":          "temperature",
+    "TRADINGAGENTS_UNIVERSE_MODE":        "universe_mode",
+    "TRADINGAGENTS_UNIVERSE_TOP_N":       "universe_top_n",
+    "TRADINGAGENTS_UNIVERSE_WORKERS":     "universe_workers",
 }
 
 
@@ -81,6 +84,12 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "max_risk_discuss_rounds": 1,
     "max_recur_limit": 100,
     "analyst_concurrency_limit": 1,
+    # Universe batch mode. Set ``TRADINGAGENTS_UNIVERSE_MODE=nyse_nasdaq_top``
+    # or use the CLI flag to run the graph for the largest NYSE/NASDAQ
+    # companies and emit a ranked best-ticker summary.
+    "universe_mode": None,
+    "universe_top_n": 5000,
+    "universe_workers": 8,
     # News / data fetching parameters
     # Increase for longer lookback strategies or to broaden macro coverage;
     # decrease to reduce token usage in agent prompts.

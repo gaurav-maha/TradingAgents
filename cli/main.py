@@ -22,6 +22,7 @@ from rich.align import Align
 from rich.rule import Rule
 
 from tradingagents.graph.trading_graph import TradingAgentsGraph
+from tradingagents.universe import run_top_nyse_nasdaq_universe
 from tradingagents.graph.analyst_execution import (
     AnalystWallTimeTracker,
     build_analyst_execution_plan,
@@ -463,7 +464,7 @@ def update_display(layout, spinner_text=None, stats_handler=None, start_time=Non
     layout["footer"].update(Panel(stats_table, border_style="grey50"))
 
 
-def get_user_selections():
+def get_user_selections(universe_mode: str | None = None):
     """Get all user selections before starting the analysis display."""
     # Display ASCII art welcome message
     with open(Path(__file__).parent / "static" / "welcome.txt", "r", encoding="utf-8") as f:
@@ -502,22 +503,33 @@ def get_user_selections():
             box_content += f"\n[dim]Default: {default}[/dim]"
         return Panel(box_content, border_style="blue", padding=(1, 2))
 
-    # Step 1: Ticker symbol
-    console.print(
-        create_question_box(
-            "Step 1: Ticker Symbol",
-            "Enter the ticker, with exchange suffix when needed (e.g. SPY, 0700.HK, BTC-USD)",
-            "SPY",
-        )
-    )
-    selected_ticker = get_ticker()
-    asset_type = detect_asset_type(selected_ticker)
-    # Only announce when it's not the default stock path, to avoid printing
-    # "stock" on every run.
-    if asset_type.value != "stock":
+    # Step 1: Ticker symbol or universe mode
+    if universe_mode == "nyse_nasdaq_top":
         console.print(
-            f"[green]Detected asset type:[/green] {asset_type.value}"
+            create_question_box(
+                "Step 1: Universe",
+                "Run TradingAgents for the top NYSE/NASDAQ companies by market cap",
+                "nyse_nasdaq_top",
+            )
         )
+        selected_ticker = None
+        asset_type = AssetType.STOCK
+    else:
+        console.print(
+            create_question_box(
+                "Step 1: Ticker Symbol",
+                "Enter the ticker, with exchange suffix when needed (e.g. SPY, 0700.HK, BTC-USD)",
+                "SPY",
+            )
+        )
+        selected_ticker = get_ticker()
+        asset_type = detect_asset_type(selected_ticker)
+        # Only announce when it's not the default stock path, to avoid printing
+        # "stock" on every run.
+        if asset_type.value != "stock":
+            console.print(
+                f"[green]Detected asset type:[/green] {asset_type.value}"
+            )
 
     # Step 2: Analysis date
     default_date = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -662,6 +674,7 @@ def get_user_selections():
     return {
         "ticker": selected_ticker,
         "asset_type": asset_type.value,
+        "universe_mode": universe_mode,
         "analysis_date": analysis_date,
         "analysts": selected_analysts,
         "research_depth": selected_research_depth,
@@ -988,9 +1001,16 @@ def format_tool_args(args, max_length=80) -> str:
         return result[:max_length - 3] + "..."
     return result
 
-def run_analysis(checkpoint: bool = False):
+def run_analysis(
+    checkpoint: bool = False,
+    universe_mode: str | None = None,
+    universe_top_n: int | None = None,
+    universe_workers: int | None = None,
+):
+    effective_universe_mode = universe_mode or DEFAULT_CONFIG.get("universe_mode")
+
     # First get all user selections
-    selections = get_user_selections()
+    selections = get_user_selections(universe_mode=effective_universe_mode)
 
     # Create config with selected research depth
     config = DEFAULT_CONFIG.copy()
@@ -1006,6 +1026,9 @@ def run_analysis(checkpoint: bool = False):
     config["anthropic_effort"] = selections.get("anthropic_effort")
     config["output_language"] = selections.get("output_language", "English")
     config["checkpoint_enabled"] = checkpoint
+    config["universe_mode"] = effective_universe_mode
+    config["universe_top_n"] = universe_top_n or config.get("universe_top_n", 5000)
+    config["universe_workers"] = universe_workers or config.get("universe_workers", 8)
 
     # Create stats callback handler for tracking LLM/tool calls
     stats_handler = StatsCallbackHandler()
@@ -1013,6 +1036,26 @@ def run_analysis(checkpoint: bool = False):
     # Normalize analyst selection to predefined order (selection is a 'set', order is fixed)
     selected_set = {analyst.value for analyst in selections["analysts"]}
     selected_analyst_keys = [a for a in ANALYST_ORDER if a in selected_set]
+
+    if effective_universe_mode == "nyse_nasdaq_top":
+        console.print(
+            f"[cyan]Running TradingAgents for top "
+            f"{config['universe_top_n']} NYSE/NASDAQ companies...[/cyan]"
+        )
+        summary = run_top_nyse_nasdaq_universe(
+            config=config,
+            trade_date=selections["analysis_date"],
+            selected_analysts=selected_analyst_keys,
+            limit=config["universe_top_n"],
+            workers=config["universe_workers"],
+        )
+        console.print(f"[green]Best ticker:[/green] {summary.best_ticker or 'None'}")
+        console.print(f"[dim]Summary written to:[/dim] {summary.output_dir}")
+        return summary
+
+    if effective_universe_mode:
+        raise ValueError(f"Unsupported universe mode: {effective_universe_mode}")
+
     analyst_execution_plan = build_analyst_execution_plan(
         selected_analyst_keys,
         concurrency_limit=config["analyst_concurrency_limit"],
@@ -1358,12 +1401,32 @@ def analyze(
         "--clear-checkpoints",
         help="Delete all saved checkpoints before running (force fresh start).",
     ),
+    universe: Optional[str] = typer.Option(
+        None,
+        "--universe",
+        help="Run a universe batch instead of one ticker. Supported: nyse_nasdaq_top.",
+    ),
+    universe_limit: Optional[int] = typer.Option(
+        None,
+        "--universe-limit",
+        help="Maximum companies to analyze in universe mode. Defaults to 5000.",
+    ),
+    universe_workers: Optional[int] = typer.Option(
+        None,
+        "--universe-workers",
+        help="Concurrent workers for market-cap discovery in universe mode.",
+    ),
 ):
     if clear_checkpoints:
         from tradingagents.graph.checkpointer import clear_all_checkpoints
         n = clear_all_checkpoints(DEFAULT_CONFIG["data_cache_dir"])
         console.print(f"[yellow]Cleared {n} checkpoint(s).[/yellow]")
-    run_analysis(checkpoint=checkpoint)
+    run_analysis(
+        checkpoint=checkpoint,
+        universe_mode=universe,
+        universe_top_n=universe_limit,
+        universe_workers=universe_workers,
+    )
 
 
 if __name__ == "__main__":

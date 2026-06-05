@@ -49,11 +49,14 @@ def test_int_coercion(monkeypatch):
         monkeypatch,
         TRADINGAGENTS_MAX_DEBATE_ROUNDS="3",
         TRADINGAGENTS_MAX_RISK_ROUNDS="2",
+        TRADINGAGENTS_UNIVERSE_TOP_N="5000",
     )
     assert dc.DEFAULT_CONFIG["max_debate_rounds"] == 3
     assert isinstance(dc.DEFAULT_CONFIG["max_debate_rounds"], int)
     assert dc.DEFAULT_CONFIG["max_risk_discuss_rounds"] == 2
     assert isinstance(dc.DEFAULT_CONFIG["max_risk_discuss_rounds"], int)
+    assert dc.DEFAULT_CONFIG["universe_top_n"] == 5000
+    assert isinstance(dc.DEFAULT_CONFIG["universe_top_n"], int)
 
 
 @pytest.mark.parametrize(
@@ -96,3 +99,11 @@ def test_unknown_env_var_is_ignored(monkeypatch):
         TRADINGAGENTS_NONEXISTENT_KEY="oops",
     )
     assert "nonexistent_key" not in dc.DEFAULT_CONFIG
+
+
+def test_universe_mode_override(monkeypatch):
+    dc = _reload_with_env(
+        monkeypatch,
+        TRADINGAGENTS_UNIVERSE_MODE="nyse_nasdaq_top",
+    )
+    assert dc.DEFAULT_CONFIG["universe_mode"] == "nyse_nasdaq_top"

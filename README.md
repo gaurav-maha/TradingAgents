@@ -171,6 +171,29 @@ python -m cli.main     # alternative: run directly from source
 ```
 You will see a screen where you can select your desired tickers, analysis date, LLM provider, research depth, and more.
 
+To scan a broad US equity universe instead of one ticker, run the NYSE/NASDAQ
+top-companies mode:
+
+```bash
+tradingagents analyze --universe nyse_nasdaq_top --universe-limit 5000
+```
+
+This fetches the current Nasdaq Trader symbol directories, keeps non-ETF,
+non-test company listings on NYSE and Nasdaq, ranks them by yfinance market
+cap, runs TradingAgents once per selected ticker, and writes
+`universe_summary.json` plus `universe_summary.md` under the configured
+results directory. The same mode can be enabled from environment settings:
+
+```bash
+export TRADINGAGENTS_UNIVERSE_MODE=nyse_nasdaq_top
+export TRADINGAGENTS_UNIVERSE_TOP_N=5000
+export TRADINGAGENTS_UNIVERSE_WORKERS=8
+tradingagents analyze
+```
+
+Running 5000 full agent workflows can take a long time and consume substantial
+LLM quota; use `--universe-limit` for smaller trial runs.
+
 ### Markets and tickers
 
 TradingAgents works with any market Yahoo Finance covers, using the exchange-suffixed ticker. Company identity and the alpha benchmark resolve automatically per market.
