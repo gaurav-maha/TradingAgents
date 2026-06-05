@@ -1114,8 +1114,12 @@ def run_analysis(
     config["output_language"] = selections.get("output_language", "English")
     config["checkpoint_enabled"] = checkpoint
     config["universe_mode"] = effective_universe_mode
-    config["universe_top_n"] = universe_top_n or config.get("universe_top_n", 5000)
-    config["universe_workers"] = universe_workers or config.get("universe_workers", 8)
+    config["universe_top_n"] = (
+        universe_top_n if universe_top_n is not None else config.get("universe_top_n", 5000)
+    )
+    config["universe_workers"] = (
+        universe_workers if universe_workers is not None else config.get("universe_workers", 8)
+    )
 
     # Create stats callback handler for tracking LLM/tool calls
     stats_handler = StatsCallbackHandler()
