@@ -25,6 +25,15 @@ def test_analyze_command_accepts_universe_options(monkeypatch):
             "17",
             "--universe-workers",
             "2",
+            "--non-interactive",
+            "--analysis-date",
+            "2026-06-05",
+            "--analysts",
+            "market,news",
+            "--research-depth",
+            "1",
+            "--output-language",
+            "English",
         ],
     )
 
@@ -32,6 +41,11 @@ def test_analyze_command_accepts_universe_options(monkeypatch):
     assert captured["universe_mode"] == "nyse_nasdaq_top"
     assert captured["universe_top_n"] == 17
     assert captured["universe_workers"] == 2
+    assert captured["non_interactive"] is True
+    assert captured["analysis_date"] == "2026-06-05"
+    assert captured["analysts"] == "market,news"
+    assert captured["research_depth"] == 1
+    assert captured["output_language"] == "English"
 
 
 def test_run_analysis_delegates_to_universe_batch(monkeypatch, tmp_path):
@@ -67,7 +81,7 @@ def test_run_analysis_delegates_to_universe_batch(monkeypatch, tmp_path):
             "universe_workers": 8,
         },
     )
-    monkeypatch.setattr(main, "get_user_selections", lambda universe_mode=None: selections)
+    monkeypatch.setattr(main, "get_user_selections", lambda **kwargs: selections)
 
     def fake_universe_runner(**kwargs):
         captured.update(kwargs)
@@ -85,6 +99,11 @@ def test_run_analysis_delegates_to_universe_batch(monkeypatch, tmp_path):
         universe_mode="nyse_nasdaq_top",
         universe_top_n=17,
         universe_workers=2,
+        non_interactive=True,
+        analysis_date="2026-06-05",
+        analysts="market,news",
+        research_depth=1,
+        output_language="English",
     )
 
     assert captured["trade_date"] == "2026-06-05"
@@ -92,3 +111,57 @@ def test_run_analysis_delegates_to_universe_batch(monkeypatch, tmp_path):
     assert captured["limit"] == 17
     assert captured["workers"] == 2
     assert captured["config"]["checkpoint_enabled"] is False
+
+
+def test_non_interactive_universe_selection_uses_overrides_without_prompts(monkeypatch):
+    import cli.main as main
+
+    monkeypatch.setattr(main, "fetch_announcements", lambda: [])
+    monkeypatch.setattr(main, "display_announcements", lambda console, announcements: None)
+
+    prompt_names = [
+        "get_analysis_date",
+        "ask_output_language",
+        "select_analysts",
+        "select_research_depth",
+        "select_llm_provider",
+        "select_shallow_thinking_agent",
+        "select_deep_thinking_agent",
+    ]
+    for name in prompt_names:
+        monkeypatch.setattr(
+            main,
+            name,
+            lambda *args, _name=name, **kwargs: (_ for _ in ()).throw(
+                AssertionError(f"{_name} should not be called")
+            ),
+        )
+
+    monkeypatch.setattr(
+        main,
+        "DEFAULT_CONFIG",
+        {
+            **main.DEFAULT_CONFIG,
+            "llm_provider": "ollama",
+            "backend_url": "http://localhost:11434/v1",
+            "quick_think_llm": "llama3.1",
+            "deep_think_llm": "llama3.1",
+            "output_language": "English",
+            "max_debate_rounds": 1,
+        },
+    )
+
+    selections = main.get_user_selections(
+        universe_mode="nyse_nasdaq_top",
+        non_interactive=True,
+        analysis_date="2026-06-05",
+        analysts="market,news",
+        research_depth=1,
+        output_language="English",
+    )
+
+    assert selections["analysis_date"] == "2026-06-05"
+    assert [analyst.value for analyst in selections["analysts"]] == ["market", "news"]
+    assert selections["research_depth"] == 1
+    assert selections["llm_provider"] == "ollama"
+    assert selections["shallow_thinker"] == "llama3.1"

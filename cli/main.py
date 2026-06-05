@@ -464,7 +464,53 @@ def update_display(layout, spinner_text=None, stats_handler=None, start_time=Non
     layout["footer"].update(Panel(stats_table, border_style="grey50"))
 
 
-def get_user_selections(universe_mode: str | None = None):
+def _validate_analysis_date(date_str: str) -> str:
+    try:
+        analysis_date = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+    except ValueError as exc:
+        raise ValueError("Analysis date must use YYYY-MM-DD format") from exc
+    if analysis_date.date() > datetime.datetime.now().date():
+        raise ValueError("Analysis date cannot be in the future")
+    return date_str
+
+
+def _analysts_from_override(raw: str | None, asset_type: AssetType) -> list[AnalystType]:
+    available = filter_analysts_for_asset_type(
+        list(AnalystType),
+        asset_type,
+    )
+    if raw is None or not raw.strip():
+        return available
+
+    by_value = {analyst.value: analyst for analyst in available}
+    selected: list[AnalystType] = []
+    invalid: list[str] = []
+    for item in raw.split(","):
+        key = item.strip().lower()
+        if not key:
+            continue
+        analyst = by_value.get(key)
+        if analyst is None:
+            invalid.append(key)
+        else:
+            selected.append(analyst)
+
+    if invalid:
+        valid = ", ".join(analyst.value for analyst in available)
+        raise ValueError(f"Unsupported analyst(s): {', '.join(invalid)}. Valid: {valid}")
+    if not selected:
+        raise ValueError("At least one analyst must be selected")
+    return selected
+
+
+def get_user_selections(
+    universe_mode: str | None = None,
+    non_interactive: bool = False,
+    analysis_date: str | None = None,
+    analysts: str | None = None,
+    research_depth: int | None = None,
+    output_language: str | None = None,
+):
     """Get all user selections before starting the analysis display."""
     # Display ASCII art welcome message
     with open(Path(__file__).parent / "static" / "welcome.txt", "r", encoding="utf-8") as f:
@@ -533,17 +579,26 @@ def get_user_selections(universe_mode: str | None = None):
 
     # Step 2: Analysis date
     default_date = datetime.datetime.now().strftime("%Y-%m-%d")
-    console.print(
-        create_question_box(
-            "Step 2: Analysis Date",
-            "Enter the analysis date (YYYY-MM-DD)",
-            default_date,
+    if analysis_date:
+        analysis_date = _validate_analysis_date(analysis_date)
+        console.print(f"[green]✓ Analysis date:[/green] {analysis_date}")
+    elif non_interactive:
+        analysis_date = default_date
+        console.print(f"[green]✓ Analysis date:[/green] {analysis_date}")
+    else:
+        console.print(
+            create_question_box(
+                "Step 2: Analysis Date",
+                "Enter the analysis date (YYYY-MM-DD)",
+                default_date,
+            )
         )
-    )
-    analysis_date = get_analysis_date()
+        analysis_date = get_analysis_date()
 
     # Step 3: Output language (skipped when set via TRADINGAGENTS_OUTPUT_LANGUAGE)
-    if os.environ.get("TRADINGAGENTS_OUTPUT_LANGUAGE"):
+    if output_language:
+        console.print(f"[green]✓ Output language:[/green] {output_language}")
+    elif os.environ.get("TRADINGAGENTS_OUTPUT_LANGUAGE") or non_interactive:
         output_language = DEFAULT_CONFIG["output_language"]
         console.print(
             f"[green]✓ Output language from environment:[/green] {output_language}"
@@ -558,36 +613,52 @@ def get_user_selections(universe_mode: str | None = None):
         output_language = ask_output_language()
 
     # Step 4: Select analysts
-    console.print(
-        create_question_box(
-            "Step 4: Analysts Team", "Select your LLM analyst agents for the analysis"
+    if analysts is not None or non_interactive:
+        selected_analysts = _analysts_from_override(analysts, asset_type)
+        console.print(
+            f"[green]Selected analysts:[/green] "
+            f"{', '.join(analyst.value for analyst in selected_analysts)}"
         )
-    )
-    selected_analysts = select_analysts(asset_type)
-    console.print(
-        f"[green]Selected analysts:[/green] {', '.join(analyst.value for analyst in selected_analysts)}"
-    )
+    else:
+        console.print(
+            create_question_box(
+                "Step 4: Analysts Team", "Select your LLM analyst agents for the analysis"
+            )
+        )
+        selected_analysts = select_analysts(asset_type)
+        console.print(
+            f"[green]Selected analysts:[/green] {', '.join(analyst.value for analyst in selected_analysts)}"
+        )
 
     # Step 5: Research depth
-    console.print(
-        create_question_box(
-            "Step 5: Research Depth", "Select your research depth level"
+    if research_depth is not None:
+        selected_research_depth = int(research_depth)
+        console.print(f"[green]✓ Research depth:[/green] {selected_research_depth}")
+    elif non_interactive:
+        selected_research_depth = int(DEFAULT_CONFIG["max_debate_rounds"])
+        console.print(f"[green]✓ Research depth:[/green] {selected_research_depth}")
+    else:
+        console.print(
+            create_question_box(
+                "Step 5: Research Depth", "Select your research depth level"
+            )
         )
-    )
-    selected_research_depth = select_research_depth()
+        selected_research_depth = select_research_depth()
 
     # Step 6: LLM Provider (skipped when set via TRADINGAGENTS_LLM_PROVIDER).
     # The backend URL comes from TRADINGAGENTS_LLM_BACKEND_URL when set,
     # otherwise the provider's default endpoint — the same value the menu
     # would have picked.
     provider_from_env = bool(os.environ.get("TRADINGAGENTS_LLM_PROVIDER"))
-    if provider_from_env:
+    if provider_from_env or non_interactive:
         selected_llm_provider = DEFAULT_CONFIG["llm_provider"].lower()
         backend_url = DEFAULT_CONFIG["backend_url"] or provider_default_url(selected_llm_provider)
-        console.print(f"[green]✓ LLM provider from environment:[/green] {selected_llm_provider}")
+        source = "environment" if provider_from_env else "default config"
+        console.print(f"[green]✓ LLM provider from {source}:[/green] {selected_llm_provider}")
         console.print(f"[green]✓ Backend URL:[/green] {backend_url}")
         # Still confirm/persist the API key so the run doesn't fail later.
-        ensure_api_key(selected_llm_provider)
+        if not non_interactive:
+            ensure_api_key(selected_llm_provider)
     else:
         console.print(
             create_question_box(
@@ -617,7 +688,11 @@ def get_user_selections(universe_mode: str | None = None):
         ensure_api_key(selected_llm_provider)
 
     # Step 7: Thinking agents (skipped when either model is set via environment)
-    if os.environ.get("TRADINGAGENTS_QUICK_THINK_LLM") or os.environ.get("TRADINGAGENTS_DEEP_THINK_LLM"):
+    if (
+        os.environ.get("TRADINGAGENTS_QUICK_THINK_LLM")
+        or os.environ.get("TRADINGAGENTS_DEEP_THINK_LLM")
+        or non_interactive
+    ):
         selected_shallow_thinker = DEFAULT_CONFIG["quick_think_llm"]
         selected_deep_thinker = DEFAULT_CONFIG["deep_think_llm"]
         console.print(
@@ -642,7 +717,7 @@ def get_user_selections(universe_mode: str | None = None):
     # When the provider is configured via environment we keep the run fully
     # non-interactive and use the config defaults (None = each provider's own
     # default reasoning/thinking behavior) instead of prompting.
-    if provider_from_env:
+    if provider_from_env or non_interactive:
         thinking_level = DEFAULT_CONFIG["google_thinking_level"]
         reasoning_effort = DEFAULT_CONFIG["openai_reasoning_effort"]
         anthropic_effort = DEFAULT_CONFIG["anthropic_effort"]
@@ -1006,11 +1081,23 @@ def run_analysis(
     universe_mode: str | None = None,
     universe_top_n: int | None = None,
     universe_workers: int | None = None,
+    non_interactive: bool = False,
+    analysis_date: str | None = None,
+    analysts: str | None = None,
+    research_depth: int | None = None,
+    output_language: str | None = None,
 ):
     effective_universe_mode = universe_mode or DEFAULT_CONFIG.get("universe_mode")
 
     # First get all user selections
-    selections = get_user_selections(universe_mode=effective_universe_mode)
+    selections = get_user_selections(
+        universe_mode=effective_universe_mode,
+        non_interactive=non_interactive,
+        analysis_date=analysis_date,
+        analysts=analysts,
+        research_depth=research_depth,
+        output_language=output_language,
+    )
 
     # Create config with selected research depth
     config = DEFAULT_CONFIG.copy()
@@ -1416,6 +1503,31 @@ def analyze(
         "--universe-workers",
         help="Concurrent workers for market-cap discovery in universe mode.",
     ),
+    non_interactive: bool = typer.Option(
+        False,
+        "--non-interactive",
+        help="Use config/default values instead of terminal prompts. Intended for schedulers.",
+    ),
+    analysis_date: Optional[str] = typer.Option(
+        None,
+        "--analysis-date",
+        help="Analysis date in YYYY-MM-DD format. Defaults to today in --non-interactive mode.",
+    ),
+    analysts: Optional[str] = typer.Option(
+        None,
+        "--analysts",
+        help="Comma-separated analysts, e.g. market,news,social,fundamentals.",
+    ),
+    research_depth: Optional[int] = typer.Option(
+        None,
+        "--research-depth",
+        help="Research depth/debate rounds. Defaults to configured max_debate_rounds in --non-interactive mode.",
+    ),
+    output_language: Optional[str] = typer.Option(
+        None,
+        "--output-language",
+        help="Output language for reports and final decision.",
+    ),
 ):
     if clear_checkpoints:
         from tradingagents.graph.checkpointer import clear_all_checkpoints
@@ -1426,6 +1538,11 @@ def analyze(
         universe_mode=universe,
         universe_top_n=universe_limit,
         universe_workers=universe_workers,
+        non_interactive=non_interactive,
+        analysis_date=analysis_date,
+        analysts=analysts,
+        research_depth=research_depth,
+        output_language=output_language,
     )
 
 

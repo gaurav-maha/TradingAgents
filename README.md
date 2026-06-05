@@ -194,6 +194,24 @@ tradingagents analyze
 Running 5000 full agent workflows can take a long time and consume substantial
 LLM quota; use `--universe-limit` for smaller trial runs.
 
+For unattended schedulers, add `--non-interactive` plus explicit defaults:
+
+```bash
+tradingagents analyze \
+  --universe nyse_nasdaq_top \
+  --universe-limit 5000 \
+  --non-interactive \
+  --analysts market,news,social,fundamentals \
+  --research-depth 1 \
+  --output-language English
+```
+
+On macOS, use `launchd` to run that command daily. Schedule in
+`America/New_York` by keeping your Mac on Eastern Time; `launchd`
+`StartCalendarInterval` uses the Mac's local timezone. For full 5000-ticker
+runs, an evening start such as 20:00 ET is safer than 08:00 ET because the
+batch can run overnight. For smaller limits, a pre-market start is reasonable.
+
 ### Markets and tickers
 
 TradingAgents works with any market Yahoo Finance covers, using the exchange-suffixed ticker. Company identity and the alpha benchmark resolve automatically per market.
