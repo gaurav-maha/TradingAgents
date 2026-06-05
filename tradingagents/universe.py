@@ -4,9 +4,9 @@ The universe source is Nasdaq Trader's public symbol directory:
 - ``nasdaqlisted.txt`` for Nasdaq-listed securities
 - ``otherlisted.txt`` filtered to ``Exchange == N`` for NYSE-listed securities
 
-Both files are generated for the current trading day and carry ETF/test-issue
-flags, which lets this module build a company-only universe before ranking by
-market cap.
+Both files are generated for the current trading day and carry test-issue
+flags, which lets this module exclude Nasdaq Trader test securities before
+ranking by market cap. ETFs are intentionally eligible.
 """
 
 from __future__ import annotations
@@ -87,7 +87,7 @@ def _rows_from_pipe_text(text: str) -> Iterable[dict[str, str]]:
 def _parse_nasdaq_listed(text: str) -> list[SecurityListing]:
     listings: list[SecurityListing] = []
     for row in _rows_from_pipe_text(text):
-        if row.get("Test Issue") != "N" or row.get("ETF") != "N":
+        if row.get("Test Issue") != "N":
             continue
         symbol = _normalize_symbol(row.get("Symbol", ""))
         name = row.get("Security Name", "").strip()
@@ -101,7 +101,7 @@ def _parse_other_listed(text: str) -> list[SecurityListing]:
     for row in _rows_from_pipe_text(text):
         if row.get("Exchange") != "N":
             continue
-        if row.get("Test Issue") != "N" or row.get("ETF") != "N":
+        if row.get("Test Issue") != "N":
             continue
         symbol = _normalize_symbol(row.get("ACT Symbol", ""))
         name = row.get("Security Name", "").strip()
@@ -113,10 +113,11 @@ def _parse_other_listed(text: str) -> list[SecurityListing]:
 def load_nyse_nasdaq_company_listings(
     fetch_text: Callable[[str], str] = _fetch_text,
 ) -> list[SecurityListing]:
-    """Load current company listings from Nasdaq and NYSE.
+    """Load current Nasdaq and NYSE listings.
 
-    ETFs, Nasdaq Trader test issues, and non-NYSE other-listed securities are
-    excluded. Duplicates are collapsed by symbol, with deterministic sorting.
+    Nasdaq Trader test issues and non-NYSE other-listed securities are
+    excluded. ETFs are included. Duplicates are collapsed by symbol, with
+    deterministic sorting.
     """
     by_symbol: dict[str, SecurityListing] = {}
     for listing in _parse_other_listed(fetch_text(OTHER_LISTED_URL)):
@@ -237,7 +238,7 @@ def write_universe_summary(
     )
 
     lines = [
-        "# NYSE/NASDAQ Top Companies TradingAgents Summary",
+        "# NYSE/NASDAQ Top Tickers TradingAgents Summary",
         "",
         f"Best ticker: **{best_ticker or 'None'}**",
         "",

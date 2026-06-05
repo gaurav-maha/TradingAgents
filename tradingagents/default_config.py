@@ -86,7 +86,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "analyst_concurrency_limit": 1,
     # Universe batch mode. Set ``TRADINGAGENTS_UNIVERSE_MODE=nyse_nasdaq_top``
     # or use the CLI flag to run the graph for the largest NYSE/NASDAQ
-    # companies and emit a ranked best-ticker summary.
+    # tickers by market cap and emit a ranked best-ticker summary.
     "universe_mode": None,
     "universe_top_n": 5000,
     "universe_workers": 8,

@@ -172,15 +172,15 @@ python -m cli.main     # alternative: run directly from source
 You will see a screen where you can select your desired tickers, analysis date, LLM provider, research depth, and more.
 
 To scan a broad US equity universe instead of one ticker, run the NYSE/NASDAQ
-top-companies mode:
+top-tickers mode:
 
 ```bash
 tradingagents analyze --universe nyse_nasdaq_top --universe-limit 5000
 ```
 
-This fetches the current Nasdaq Trader symbol directories, keeps non-ETF,
-non-test company listings on NYSE and Nasdaq, ranks them by yfinance market
-cap, runs TradingAgents once per selected ticker, and writes
+This fetches the current Nasdaq Trader symbol directories, keeps non-test
+listings on NYSE and Nasdaq, ranks them by yfinance market cap, runs
+TradingAgents once per selected ticker, and writes
 `universe_summary.json` plus `universe_summary.md` under the configured
 results directory. The same mode can be enabled from environment settings:
 

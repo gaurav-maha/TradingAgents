@@ -19,7 +19,7 @@ File Creation Time: 0605202618:01|||||||
 """
 
 
-def test_load_nyse_nasdaq_company_listings_filters_etfs_tests_and_non_nyse():
+def test_load_nyse_nasdaq_company_listings_includes_etfs_but_filters_tests_and_non_nyse():
     from tradingagents.universe import load_nyse_nasdaq_company_listings
 
     pages = {
@@ -33,6 +33,7 @@ def test_load_nyse_nasdaq_company_listings_filters_etfs_tests_and_non_nyse():
         ("BRK-B", "NYSE"),
         ("JPM", "NYSE"),
         ("MSFT", "NASDAQ"),
+        ("QQQM", "NASDAQ"),
     ]
     assert listings[0].name == "Berkshire Hathaway Inc. Class B"
 

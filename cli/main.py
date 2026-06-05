@@ -508,7 +508,7 @@ def get_user_selections(universe_mode: str | None = None):
         console.print(
             create_question_box(
                 "Step 1: Universe",
-                "Run TradingAgents for the top NYSE/NASDAQ companies by market cap",
+                "Run TradingAgents for the top NYSE/NASDAQ tickers by market cap",
                 "nyse_nasdaq_top",
             )
         )
@@ -1040,7 +1040,7 @@ def run_analysis(
     if effective_universe_mode == "nyse_nasdaq_top":
         console.print(
             f"[cyan]Running TradingAgents for top "
-            f"{config['universe_top_n']} NYSE/NASDAQ companies...[/cyan]"
+            f"{config['universe_top_n']} NYSE/NASDAQ tickers...[/cyan]"
         )
         summary = run_top_nyse_nasdaq_universe(
             config=config,
