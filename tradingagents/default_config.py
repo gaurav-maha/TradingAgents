@@ -21,6 +21,7 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_UNIVERSE_MODE":        "universe_mode",
     "TRADINGAGENTS_UNIVERSE_TOP_N":       "universe_top_n",
     "TRADINGAGENTS_UNIVERSE_WORKERS":     "universe_workers",
+    "TRADINGAGENTS_OPENAI_REASONING_EFFORT": "openai_reasoning_effort",
 }
 
 

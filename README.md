@@ -231,6 +231,10 @@ scripts/run_universe_and_email.sh \
   --output-language English
 ```
 
+For Codex/ChatGPT subscription runs, set
+`TRADINGAGENTS_OPENAI_REASONING_EFFORT=xhigh` in `.env` to use the deepest
+reasoning tier during unattended runs.
+
 The wrapper sends `universe_summary.md` with the local macOS `mail` command.
 If `TRADINGAGENTS_EMAIL_TO` is unset, it leaves the summary on disk and logs
 the path instead.
