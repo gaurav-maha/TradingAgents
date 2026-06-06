@@ -182,7 +182,13 @@ This fetches the current Nasdaq Trader symbol directories, keeps non-test
 listings on NYSE and Nasdaq, ranks them by yfinance market cap, runs
 TradingAgents once per selected ticker, and writes
 `universe_summary.json` plus `universe_summary.md` under the configured
-results directory. The same mode can be enabled from environment settings:
+results directory. By default, universe results are written here:
+
+```bash
+~/.tradingagents/logs/universe/nyse_nasdaq_top/<analysis-date>/
+```
+
+The same mode can be enabled from environment settings:
 
 ```bash
 export TRADINGAGENTS_UNIVERSE_MODE=nyse_nasdaq_top
@@ -211,6 +217,23 @@ On macOS, use `launchd` to run that command daily. Schedule in
 `StartCalendarInterval` uses the Mac's local timezone. For full 5000-ticker
 runs, an evening start such as 20:00 ET is safer than 08:00 ET because the
 batch can run overnight. For smaller limits, a pre-market start is reasonable.
+
+To email the final universe summary after a scheduled run, set
+`TRADINGAGENTS_EMAIL_TO` in `.env` and have launchd call the wrapper script:
+
+```bash
+scripts/run_universe_and_email.sh \
+  --universe nyse_nasdaq_top \
+  --universe-limit 5000 \
+  --non-interactive \
+  --analysts market,news,social,fundamentals \
+  --research-depth 3 \
+  --output-language English
+```
+
+The wrapper sends `universe_summary.md` with the local macOS `mail` command.
+If `TRADINGAGENTS_EMAIL_TO` is unset, it leaves the summary on disk and logs
+the path instead.
 
 ### Markets and tickers
 
