@@ -61,6 +61,24 @@ def test_select_top_companies_by_market_cap_caps_and_sorts_descending():
     ]
 
 
+def test_fetch_yfinance_market_cap_falls_back_to_etf_total_assets(monkeypatch):
+    from tradingagents import universe
+
+    class FakeTicker:
+        fast_info = {"market_cap": None, "marketCap": None}
+
+        def get_info(self):
+            return {
+                "quoteType": "ETF",
+                "marketCap": None,
+                "totalAssets": 123_456,
+            }
+
+    monkeypatch.setattr(universe.yf, "Ticker", lambda symbol: FakeTicker())
+
+    assert universe.fetch_yfinance_market_cap("SPY") == 123_456
+
+
 def test_rank_universe_run_results_chooses_best_rating_then_market_cap():
     from tradingagents.universe import UniverseRunResult, rank_universe_run_results
 

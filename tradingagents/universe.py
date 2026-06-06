@@ -149,7 +149,13 @@ def fetch_yfinance_market_cap(symbol: str) -> Optional[int]:
 
     try:
         info = ticker.get_info() if hasattr(ticker, "get_info") else ticker.info
-        market_cap = info.get("marketCap") or info.get("market_cap")
+        market_cap = (
+            info.get("marketCap")
+            or info.get("market_cap")
+            # ETFs commonly expose assets under management instead of market
+            # cap. Use it for universe sizing so ETFs remain eligible.
+            or info.get("totalAssets")
+        )
         if market_cap:
             return int(market_cap)
     except Exception:
