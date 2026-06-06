@@ -235,9 +235,12 @@ For Codex/ChatGPT subscription runs, set
 `TRADINGAGENTS_OPENAI_REASONING_EFFORT=xhigh` in `.env` to use the deepest
 reasoning tier during unattended runs.
 
-The wrapper sends `universe_summary.md` with the local macOS `mail` command.
-If `TRADINGAGENTS_EMAIL_TO` is unset, it leaves the summary on disk and logs
-the path instead.
+The wrapper sends a multipart plain-text and HTML summary over SMTP. For Gmail,
+set `TRADINGAGENTS_SMTP_HOST=smtp.gmail.com`,
+`TRADINGAGENTS_SMTP_PORT=587`, `TRADINGAGENTS_SMTP_USER`,
+`TRADINGAGENTS_SMTP_PASSWORD`, and `TRADINGAGENTS_EMAIL_FROM` in `.env`. If
+`TRADINGAGENTS_EMAIL_TO` is unset, it leaves the summary on disk and logs the
+path instead.
 
 ### Markets and tickers
 
