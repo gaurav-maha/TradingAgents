@@ -38,7 +38,7 @@ if ! command -v mail >/dev/null 2>&1; then
   exit 0
 fi
 
-BEST_TICKER="$(python - "$SUMMARY_FILE" <<'PY'
+BEST_TICKER="$("${TRADINGAGENTS_UV:-uv}" run python - "$SUMMARY_FILE" <<'PY'
 import json
 import sys
 from pathlib import Path
